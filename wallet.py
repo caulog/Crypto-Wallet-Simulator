@@ -31,8 +31,6 @@ db = client.crypto_wallet
 wallets = db.wallets
 transactions = db.transactions
 
-print(client.list_database_names())
-
 # Create wallets
 def create_wallet():
     wallet_id = str(uuid.uuid4())
