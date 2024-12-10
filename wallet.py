@@ -58,8 +58,9 @@ def send_crypto(sender, recipient, amount):
     if sender['balance'] < amount:
         return "Invalid funds."
 
-    wallet = wallets.update_one({'wallet_id': sender}, {"$inc": {"balance": -amount}})      # pymongo update_one() to do crypto transfer
-    wallet = wallets.update_one({'wallet_id': recipient}, {"$inc": {"balance": amount}})
+    wallets.update_one({'wallet_id': sender}, {"$inc": {"balance": -amount}})      # pymongo update_one() to do crypto transfer
+    wallets.update_one({'wallet_id': recipient}, {"$inc": {"balance": amount}})
+
     transactions.insert_one({
         "sender": sender,
         "recipient": recipient,
@@ -73,34 +74,75 @@ def get_transactions(wallet_id):
     wallet_transactions = list(transactions.find({'wallet_id': wallet_id}))
     return wallet_transactions
 
+# Get all ids from database
+def get_all_wallet_ids():
+    wallet_ids = [wallet['wallet_id'] for wallet in wallets.find()]
+    return wallet_ids
+
+def deposit(wallet_id, amount):
+    wallet = wallets.find_one({'wallet_id': wallet_id})  # Find the wallet by wallet_id
+
+    if not wallet:
+        return "Wallet not found."
+
+    if amount <= 0:
+        return "Deposit amount must be greater than 0."
+
+    # Update the wallet's balance
+    wallets.update_one(
+        {'wallet_id': wallet_id},
+        {"$inc": {"balance": amount}}  # Increment the balance by the deposit amount
+    )
+
+    # Log the transaction in the transactions collection
+    transactions.insert_one({
+        "wallet_id": wallet_id,
+        "amount": amount,
+        "transaction_type": "deposit",
+    })
+    return "Deposited"
+
 
 # Streamlit app
 st.title("Crypto Wallet Simulator")
 
 # Navigation
-options = ["Create Wallet", "View Balance", "Send Crypto", "Transaction History"]
+options = ["Create Wallet", "View Balance", "Send Crypto", "Transaction History", "Deposit"]
 choice = st.sidebar.selectbox("Choose an option", options)
+
+wallet_ids = get_all_wallet_ids()
 
 if choice == "Create Wallet":
     wallet_id = create_wallet()
     st.success(f"Wallet created with ID: {wallet_id}")
 
 elif choice == "View Balance":
-    wallet_id = st.text_input("Enter Wallet ID")
+    wallet_id = st.selectbox("Select Wallet ID", wallet_ids)
     if wallet_id:
         balance = get_balance(wallet_id)
         st.write(f"Wallet balance: {balance}")
 
 elif choice == "Send Crypto":
-    sender = st.text_input("Enter Sender Wallet ID")
-    recipient = st.text_input("Enter Recipient Wallet ID")
+    sender = st.selectbox("Select Sender Wallet ID", wallet_ids)
+    recipient = st.selectbox("Select Recipient Wallet ID", wallet_ids)
     amount = st.number_input("Enter Amount", min_value=1)
     if st.button("Send"):
         message = send_crypto(sender, recipient, amount)
         st.success(message)
 
 elif choice == "Transaction History":
-    wallet_id = st.text_input("Enter Wallet ID for Transaction History")
+    wallet_id = st.selectbox("Select wallet for Transaction History", wallet_ids)
     if wallet_id:
         transactions = get_transactions(wallet_id)
         st.write(transactions)
+
+elif choice == "Deposit":
+    wallet_id = st.selectbox("Select your wallet:", wallet_ids)
+    deposit_amount = st.number_input("Enter amount to deposit:", min_value=0.01, step=0.01)
+    if st.button("Deposit"):
+        if wallet_id:
+            # Call the deposit function and show the result
+            result = deposit(wallet_id, deposit_amount)
+            st.success(result)
+        else:
+            st.error("Please select a wallet.")
